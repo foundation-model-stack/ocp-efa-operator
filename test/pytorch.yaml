@@ -1,0 +1,202 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pytorch-sa
+  namespace: ocp-efa-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: allreduce
+  namespace: ocp-efa-operator
+data:
+  allreduce.py: |
+    import os
+    import sys
+    import torch
+    import torch.distributed as dist
+    import time
+
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+
+    torch.cuda.set_device(local_rank)
+
+    dist.init_process_group("nccl")
+
+    if rank == 0:
+        print(torch.cuda.nccl.version())
+
+    torch.manual_seed(1235911);
+
+    nMB = 2000.0
+    npts = int(nMB*1.0e6/4.0)
+
+    Tensor = torch.rand(npts, device='cuda')
+    torch.cuda.synchronize()
+
+    if rank == 0:
+        print("size(MB)   avgbw(GB/sec)   maxbw(GB/sec)", file=sys.stderr)
+
+    for nMB in [8.0,10.0,12.5,15.0,20.0,31.6,40.0,50.0,64.0,80.0,100.0,125.0,160.0,200.0,250.0,316.0,400.0,500.0,640.0,800.0,1000.0,1250.0,1600.0,2000.0]:
+
+        if nMB < 512.0:
+            maxiter = 20
+        else:
+            maxiter = 5
+
+        npts = int(nMB*1.0e6/4.0)
+        nm1 = int(npts - 1)
+
+        # launch two calls outside the timing loop
+        dist.all_reduce(Tensor[0:nm1], op=dist.ReduceOp.SUM)
+        torch.cuda.synchronize()
+        dist.all_reduce(Tensor[0:nm1], op=dist.ReduceOp.SUM)
+        torch.cuda.synchronize()
+
+        tbeg = time.perf_counter()
+        t1 = tbeg
+        tmin = 1.0e30
+
+        for i in range(maxiter):
+            dist.all_reduce(Tensor[0:nm1], op=dist.ReduceOp.SUM)
+            torch.cuda.synchronize()
+            t2 = time.perf_counter()
+            if (t2 - t1) < tmin:
+                tmin = (t2 - t1)
+            t1 = t2
+
+        torch.cuda.synchronize()
+        tend = time.perf_counter()
+
+        elapsed = tend - tbeg
+
+        avg_bandwidth = 4.0*2.0e-9*maxiter*npts*((world_size - 1)/world_size)/elapsed
+        max_bandwidth = 4.0*2.0e-9*npts*((world_size - 1)/world_size)/tmin
+
+        if rank == 0:
+            print("{:7.1f}".format(nMB), "    ", "{:6.1f}".format(avg_bandwidth), "      ", "{:6.1f}".format(max_bandwidth), file=sys.stderr)
+  job.sh: |
+    #!/bin/bash -x
+
+    export NR_NODES="${1:-1}"
+    export GPUS_PER_NODE="${2:-1}"
+
+    export NCCL_DEBUG=INFO
+    export NCCL_DEBUG_SUBSYS=INIT,GRAPH,ENV,TUNING
+
+    export NCCL_ALGO=Ring
+
+    WORLD_SIZE=$(($GPUS_PER_NODE*$NR_NODES))
+    # operator sets:
+    # $RANK
+    # $MASTER_ADDR
+    # $MASTER_PORT
+
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/run/ocp-efa/hwloc/lib:/run/ocp-efa/amazon/efa/lib:/run/ocp-efa/rdma-core/lib64:/run/ocp-efa/rdma-core/lib64/libibverbs:/run/ocp-efa/aws-ofi-nccl/lib:/run/ocp-efa/gdrcopy/lib
+    export FI_LOG_LEVEL=debug
+    #export FI_EFA_USE_DEVICE_RDMA=1
+    export GDRCOPY_ENABLE_LOGGING=1
+    export GDRCOPY_LOG_LEVEL=1
+    torchrun \
+      --nproc_per_node=$GPUS_PER_NODE --nnodes=$NR_NODES \
+      --max_restarts=0 --rdzv_id=allreduce --rdzv_backend=c10d --rdzv_endpoint=$MASTER_ADDR \
+      /workspace/scripts/allreduce.py
+---
+apiVersion: "kubeflow.org/v1"
+kind: "PyTorchJob"
+metadata:
+  name: efa-gdr-allreduce
+  namespace: ocp-efa-operator
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        spec:
+          serviceAccount: pytorch-sa
+          containers:
+          - name: pytorch
+            image: ghcr.io/foundation-model-stack/pytorch:ocp-efa-v0.0.1
+            imagePullPolicy: Always
+            command: ["bash", "/workspace/scripts/job.sh", "2", "8"] # NR_NODES NR_GPUS
+            resources: 
+              limits:
+                cpu: 16
+                memory: 64Gi
+                nvidia.com/gpu: 8
+                hugepages-2Mi: 5120Mi
+                fms.io/efa: 4
+                fms.io/gdrdrv: 1
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+              capabilities:
+                drop: [ "ALL" ]
+            volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /workspace/scripts
+              name: job-sh
+              readOnly: true
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+          - name: job-sh
+            configMap:
+              name: allreduce
+              items:
+              - key: "job.sh"
+                path: "job.sh"
+              - key: "allreduce.py"
+                path: "allreduce.py"
+    Worker:
+      replicas: 1 # number of workers
+      restartPolicy: OnFailure
+      template:
+        spec:
+          serviceAccount: pytorch-sa
+          containers:
+          - name: pytorch
+            image: ghcr.io/foundation-model-stack/pytorch:ocp-efa-v0.0.1
+            imagePullPolicy: Always
+            command: ["bash", "/workspace/scripts/job.sh", "2", "8"] # NR_NODES NR_GPUS
+            resources:
+              limits:
+                cpu: 16
+                memory: 64Gi
+                nvidia.com/gpu: 8
+                hugepages-2Mi: 5120Mi
+                fms.io/efa: 4
+                fms.io/gdrdrv: 1
+            volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /workspace/scripts
+              name: job-sh
+              readOnly: true
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+              capabilities:
+                drop: [ "ALL" ]
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+          - name: job-sh
+            configMap:
+              name: allreduce
+              items:
+              - key: "job.sh"
+                path: "job.sh"
+              - key: "allreduce.py"
+                path: "allreduce.py"
+

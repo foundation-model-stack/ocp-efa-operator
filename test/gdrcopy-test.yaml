@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gdrcopy-sa
+  namespace: ocp-efa-operator
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gdrcopy-test
+  namespace: ocp-efa-operator
+spec:
+  selector:
+    matchLabels:
+      app: gdrcopy-test
+  template:
+    metadata:
+      labels:
+        app: gdrcopy-test
+    spec:
+      serviceAccount: gdrcopy-sa
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+      - name: gdrcopy-test
+        image: ghcr.io/foundation-model-stack/gdrcopy-test:ocp-efa-v0.0.1
+        imagePullPolicy: Always
+        command:
+        - "bash"
+        - "-c"
+        - |
+          trap "exit 0" SIGTERM SIGINT
+          stat /dev/gdrdrv
+          gdrcopy_sanity
+          gdrcopy_copybw
+          echo "COMPLETE"
+          sleep infinity &
+          wait $!
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop: [ "ALL" ]
+        resources:
+          limits:
+            fms.io/gdrdrv: 1
+            nvidia.com/gpu: 1

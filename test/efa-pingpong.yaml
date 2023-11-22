@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: efa-pingpong-sa
+  namespace: ocp-efa-operator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efa-pingpong-server
+  namespace: ocp-efa-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: efa-pingpong-server
+  template:
+    metadata:
+      labels:
+        app: efa-pingpong-server
+    spec:
+      serviceAccount: efa-pingpong-sa
+      containers:
+      - name: efa
+        image: ghcr.io/foundation-model-stack/nccl-tests:ocp-efa-v0.0.1
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop: [ "ALL" ]
+        command:
+        - bash
+        - -c
+        - |
+          trap "exit 0" SIGINT SIGTERM
+          /opt/amazon/efa/bin/fi_pingpong -p efa -e rdm  -v &
+          wait $!
+          echo COMPLETE
+          sleep infinity &
+          wait $!
+        env:
+        - name: FI_LOG_LEVEL
+          value: debug
+        - name: GDRCOPY_ENABLE_LOGGING
+          value: "1"
+        - name: GDRCOPY_LOG_LEVEL
+          value: "1"
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+        resources:
+          limits:
+            hugepages-2Mi: 5120Mi
+            memory: 12Gi
+            fms.io/efa: 4
+            fms.io/gdrdrv: 1
+            nvidia.com/gpu: 1
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efa-pingpong-client
+  namespace: ocp-efa-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: efa-pingpong-client
+  template:
+    metadata:
+      labels:
+        app: efa-pingpong-client
+    spec:
+      serviceAccount: efa-pingpong-sa
+      containers:
+      - name: efa
+        image: ghcr.io/foundation-model-stack/nccl-tests:ocp-efa-v0.0.1
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop: [ "ALL" ]
+        command:
+        - bash
+        - -c
+        - |
+          trap "exit 0" SIGINT SIGTERM
+          while [ "$target" = "" ]; do
+            target=`dig +short efa-pingpong-server.ocp-efa-operator.svc.cluster.local`
+            if [ "$target" = "" ]; then
+              sleep 1s
+            fi
+          done
+          sleep 1s
+          /opt/amazon/efa/bin/fi_pingpong -p efa -e rdm $target -v &
+          wait $!
+          echo COMPLETE
+          sleep infinity &
+          wait $!
+        env:
+        - name: FI_LOG_LEVEL
+          value: debug
+        - name: GDRCOPY_ENABLE_LOGGING
+          value: "1"
+        - name: GDRCOPY_LOG_LEVEL
+          value: "1"
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+        resources:
+          limits:
+            hugepages-2Mi: 5120Mi
+            memory: 12Gi
+            fms.io/efa: 4
+            fms.io/gdrdrv: 1
+            nvidia.com/gpu: 1
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: efa-pingpong-server
+  namespace: ocp-efa-operator
+spec:
+  selector:
+    app: efa-pingpong-server
+  ports:
+  - protocol: TCP
+    port: 47592
+    targetPort: 47592

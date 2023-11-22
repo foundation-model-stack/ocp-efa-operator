@@ -1,0 +1,14 @@
+apiVersion: efa.fms.io/v1alpha1
+kind: EfaDriver
+metadata:
+  labels:
+    app.kubernetes.io/name: efadriver
+    app.kubernetes.io/instance: ocp
+    app.kubernetes.io/part-of: ocp-efa-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: ocp-efa-operator
+  name: ocp
+spec:
+  kmmNamespace: openshift-kmm
+  awsEfaInstallerVer: "1.26.1"
+  openShift: true

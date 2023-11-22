@@ -1,0 +1,119 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - efadrivers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - efadrivers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - efadrivers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - gdrdrvdrivers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - gdrdrvdrivers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - gdrdrvdrivers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
+  - modules
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nfd.openshift.io
+  resources:
+  - nodefeaturerules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.openshift.io
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch

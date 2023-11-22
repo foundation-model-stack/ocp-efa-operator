@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mpijob-sa
+  namespace: ocp-efa-operator
+---
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: mpijob-sa-nonroot
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowedCapabilities: null
+defaultAddCapabilities: null
+fsGroup:
+  type: RunAsAny
+groups: []
+priority: null
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+- KILL
+- MKNOD
+- SETUID
+- SETGID
+runAsUser:
+  type: MustRunAsNonRoot
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+users:
+- system:serviceaccount:ocp-efa-operator:mpijob-sa
+volumes:
+- configMap
+- downwardAPI
+- emptyDir
+- ephemeral
+- persistentVolumeClaim
+- projected
+- secret
+---
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: nccl-tests
+  namespace: ocp-efa-operator
+spec:
+  slotsPerWorker: 4
+  runPolicy:
+    cleanPodPolicy: Running
+  sshAuthMountPath: /home/mpiuser/.ssh
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+         spec:
+           securityContext:
+             runAsUser: 2000
+           serviceAccount: mpijob-sa
+           restartPolicy: OnFailure
+           initContainers:
+           - image: ghcr.io/foundation-model-stack/nccl-tests:ocp-efa-v0.0.1
+             name: wait-worker-service
+             command:
+             - sleep
+             - "5"
+           containers:
+           - image: ghcr.io/foundation-model-stack/nccl-tests:ocp-efa-v0.0.1
+             imagePullPolicy: Always
+             name: mpi-tests
+             command:
+             - /opt/amazon/openmpi/bin/mpirun
+             - -np
+             - "8"
+             - -bind-to
+             - none
+             - -map-by
+             - slot
+             - -x
+             - PATH
+             - -x
+             - LD_LIBRARY_PATH
+             - -x
+             - NCCL_ALGO=Ring
+             - -x
+             - NCCL_DEBUG=INFO
+             - -x
+             - NCCL_DEBUG_SUBSYS=INIT,GRAPH,ENV,TUNING
+             #- -x
+             #- FI_LOG_LEVEL=debug
+             - -x
+             - GDRCOPY_ENABLE_LOGGING=1
+             - -x
+             - GDRCOPY_LOG_LEVEL=1
+             - --mca
+             - pml
+             - ^cm
+             - --oversubscribe
+             - /opt/nccl-tests/all_reduce_perf
+             - -b
+             - 8M
+             - -e
+             - 2G
+             - -f
+             - "8388608"
+             - -g
+             - "1"
+             - -c
+             - "0"
+    Worker:
+      replicas: 2
+      template:
+        spec:
+          serviceAccount: mpijob-sa
+          containers:
+          - image: ghcr.io/foundation-model-stack/nccl-tests:ocp-efa-v0.0.1
+            imagePullPolicy: Always
+            securityContext:
+              runAsUser: 2000
+            name: mpi-tests
+            command:
+            - /usr/sbin/sshd
+            - -De
+            - -f
+            - /home/mpiuser/.sshd_config
+            resources:
+              limits:
+                nvidia.com/gpu: 4
+                hugepages-2Mi: 5120Mi
+                memory: 16Gi
+                fms.io/efa: 2
+                fms.io/gdrdrv: 1
+            volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory

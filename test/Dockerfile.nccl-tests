@@ -1,0 +1,56 @@
+FROM nvcr.io/nvidia/cuda:12.2.0-devel-ubuntu20.04
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential g++ cmake wget zip dh-autoreconf git python3 libhwloc-dev dnsutils -y
+
+# Install EFA (run installer to build aws-ofi-nccl-plugin)
+RUN wget -q https://s3-us-west-2.amazonaws.com/aws-efa-installer/aws-efa-installer-1.28.0.tar.gz -O /tmp/aws-efa-installer-1.28.0.tar.gz && \
+    tar -xf /tmp/aws-efa-installer-1.28.0.tar.gz -C /tmp && \
+    cd /tmp/aws-efa-installer && ./efa_installer.sh -y -d --skip-kmod --skip-limit-conf --no-verify && \
+    rm -rf /tmp/aws-efa-installer-1.28.0.tar.gz /tmp/aws-efa-installer
+
+# Install GDRCOPY
+RUN wget -q https://github.com/NVIDIA/gdrcopy/archive/refs/tags/v2.4.tar.gz -O /tmp/gdrcopy.tar.gz && tar -xf /tmp/gdrcopy.tar.gz -C /tmp && \
+    cd /tmp/gdrcopy-2.4 && make prefix=/opt/gdrcopy CUDA=/usr/local/cuda-12 lib_install && rm -rf /tmp/gdrcopy.tar.gz /tmp/gdrcopy-2.4
+
+# Install NCCL
+RUN git clone https://github.com/NVIDIA/nccl.git /tmp/nccl-build -b v2.18.6-1 \
+    && cd /tmp/nccl-build \
+    && make -j src.build CUDA_HOME=/usr/local/cuda-12 BUILDDIR=/opt/nccl \
+    NVCC_GENCODE="-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_60,code=sm_60" && \
+    rm -rf /tmp/nccl-build
+
+# Install AWS OFI NCCL PLUGIN
+RUN wget -q https://github.com/aws/aws-ofi-nccl/releases/download/v1.7.3-aws/aws-ofi-nccl-1.7.3-aws.tar.gz -O /tmp/aws-ofi-nccl.tar.gz && tar -xf /tmp/aws-ofi-nccl.tar.gz -C /tmp && \
+    cd /tmp/aws-ofi-nccl-1.7.3-aws && \
+    ./autogen.sh && ./configure --prefix=/opt/aws-ofi-nccl --with-libfabric=/opt/amazon/efa --with-nccl=/opt/nccl \
+    --with-mpi=/opt/amazon/openmpi --with-cuda=/usr/local/cuda-12 --enable-platform-aws --disable-tests && \
+    make && make install && rm -rf /tmp/aws-ofi-nccl*
+
+# Install NCCL tests
+RUN wget -q https://github.com/NVIDIA/nccl-tests/archive/v2.13.7.zip -O /tmp/v2.13.7.zip && cd /tmp && unzip v2.13.7.zip && \
+    cd nccl-tests-2.13.7 && make MPI=1 MPI_HOME=/opt/amazon/openmpi NCCL_HOME=/opt/nccl CUDA_HOME=/usr/local/cuda-12 BUILDDIR=/opt/nccl-tests \
+    NVCC_GENCODE="-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_60,code=sm_60" && \
+    rm -rf /tmp/v2.13.7.zip /tmp/nccl-tests-2.13.7
+
+# Enable accessing from any users in root group for OpenShift
+RUN chgrp -R 0 /opt/amazon /opt/gdrcopy /opt/nccl /opt/aws-ofi-nccl /opt/nccl-tests && chmod -R g+rwX /opt/amazon /opt/gdrcopy /opt/nccl /opt/aws-ofi-nccl /opt/nccl-tests
+
+RUN useradd -m mpiuser -u 2000 -g 0
+ARG port=2222
+RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends libcap2-bin openssh-server openssh-client && rm -rf /var/lib/apt/lists/* && mkdir -p /var/run/sshd
+RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/sbin/sshd
+RUN sed -i "s/[ #]\(.*StrictHostKeyChecking \).*/ \1no/g" /etc/ssh/ssh_config \
+    && echo "    UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config \
+    && sed -i "s/[ #]\(.*Port \).*/ \1$port/g" /etc/ssh/ssh_config \
+    && sed -i "s/#\(StrictModes \).*/\1no/g" /etc/ssh/sshd_config \
+    && sed -i "s/#\(Port \).*/\1$port/g" /etc/ssh/sshd_config
+
+WORKDIR /home/mpiuser
+COPY --chown=mpiuser sshd_config /home/mpiuser/.sshd_config
+RUN echo "Port $port" >> /home/mpiuser/.sshd_config
+
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/amazon/openmpi/lib:/opt/nccl/lib:/opt/amazon/efa/lib:/opt/aws-ofi-nccl/lib:/opt/gdrcopy/lib
+ENV PATH=/opt/amazon/openmpi/bin/:/opt/amazon/efa/bin:$PATH
+
+USER 2000

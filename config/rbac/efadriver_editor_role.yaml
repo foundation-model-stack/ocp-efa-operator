@@ -1,0 +1,31 @@
+# permissions for end users to edit efadrivers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: efadriver-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ocp-efa-operator
+    app.kubernetes.io/part-of: ocp-efa-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: efadriver-editor-role
+rules:
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - efadrivers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - efa.fms.io
+  resources:
+  - efadrivers/status
+  verbs:
+  - get

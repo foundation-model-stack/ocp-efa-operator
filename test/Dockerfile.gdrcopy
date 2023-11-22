@@ -1,0 +1,14 @@
+FROM nvcr.io/nvidia/cuda:12.2.0-devel-ubuntu20.04
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential g++ cmake wget zip dh-autoreconf git python3 libhwloc-dev dnsutils -y
+
+# Install Check
+RUN wget -q https://github.com/libcheck/check/archive/refs/tags/0.15.2.tar.gz -O /tmp/check.tar.gz && tar -xf /tmp/check.tar.gz -C /tmp && \
+    cd /tmp/check-0.15.2 && mkdir -p build && cd build && cmake ../ && make install && rm -rf /tmp/check.tar.gz /tmp/check-0.15.2
+
+# Install GDRCOPY
+RUN wget -q https://github.com/NVIDIA/gdrcopy/archive/refs/tags/v2.4.tar.gz -O /tmp/gdrcopy.tar.gz && tar -xf /tmp/gdrcopy.tar.gz -C /tmp && \
+    cd /tmp/gdrcopy-2.4 && make CUDA=/usr/local/cuda-12 install && rm -rf /tmp/gdrcopy.tar.gz /tmp/gdrcopy-2.4
+
+USER 2000

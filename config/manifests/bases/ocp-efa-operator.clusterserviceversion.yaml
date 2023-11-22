@@ -1,0 +1,54 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: ocp-efa-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: EfaDriver is the Schema for the efadrivers API
+      displayName: Efa Driver
+      kind: EfaDriver
+      name: efadrivers.efa.fms.io
+      version: v1alpha1
+    - description: Gdrdrv is the Schema for the gdrdrvs API
+      displayName: Gdrdrv Driver
+      kind: GdrdrvDriver
+      name: gdrdrvdrivers.efa.fms.io
+      version: v1alpha1
+  description: ocp-efa-operator
+  displayName: ocp-efa-operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - ocp
+  - efa
+  - gdr
+  links:
+  - name: Ocp Efa Operator
+    url: https://ocp-efa-operator.domain
+  maintainers:
+  - email: tyos@jp.ibm.com
+    name: Takeshi Yoshimura
+  maturity: alpha
+  provider:
+    name: Foundation Model Stack
+  version: 0.0.0

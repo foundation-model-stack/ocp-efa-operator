@@ -1,0 +1,47 @@
+FROM nvcr.io/nvidia/cuda:12.2.0-devel-ubuntu20.04 as builder
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y libc6-dev \
+    build-essential gcc g++ cmake wget curl zip dh-autoreconf git rpm2cpio cpio
+
+# Install EFA (run installer to build aws-ofi-nccl-plugin)
+RUN wget -q https://s3-us-west-2.amazonaws.com/aws-efa-installer/aws-efa-installer-1.26.1.tar.gz -O /tmp/aws-efa-installer-1.26.1.tar.gz && \
+    tar -xf /tmp/aws-efa-installer-1.26.1.tar.gz -C /tmp && \
+    cd /tmp/aws-efa-installer && ./efa_installer.sh -y -d --skip-kmod --skip-limit-conf --no-verify && \
+    mkdir -p /run/ocp-efa && \
+    cd /tmp/aws-efa-installer/RPMS/RHEL8/x86_64/ && cp rdma-core/*.rpm /run/ocp-efa/ && \
+    cd /run/ocp-efa && for f in `ls /run/ocp-efa/*.rpm`; do rpm2cpio $f | cpio -idmv; done && \
+    mv /run/ocp-efa/usr /run/ocp-efa/rdma-core && \
+    cp -ar /opt/amazon /run/ocp-efa/amazon && \
+    rm -rf /tmp/aws-efa-installer-1.26.1.tar.gz /tmp/aws-efa-installer /run/ocp-efa/*.rpm /run/ocp-efa/etc
+
+# Install GDRCOPY
+RUN wget -q https://github.com/NVIDIA/gdrcopy/archive/refs/tags/v2.4.tar.gz -O /tmp/gdrcopy.tar.gz && tar -xf /tmp/gdrcopy.tar.gz -C /tmp && \
+    cd /tmp/gdrcopy-2.4 && make prefix=/run/ocp-efa/gdrcopy CUDA=/usr/local/cuda-12.2 lib_install && rm -rf /tmp/gdrcopy.tar.gz /tmp/gdrcopy-2.4
+
+# Install hwloc (required by aws-ofi-nccl)
+RUN git clone https://github.com/open-mpi/hwloc.git /tmp/hwloc && \
+    cd /tmp/hwloc && \
+     ./autogen.sh && \
+     ./configure --prefix=/run/ocp-efa/hwloc --disable-nvml && \
+     make install && \
+     ln -s /run/ocp-efa/hwloc/lib/hwloc.so.0.0.0 /run/ocp-efa/hwloc/lib/hwloc.so.15
+
+# Install libevent (required by amazon/openmpi)
+RUN wget -q https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz -O /tmp/libevent.tar.gz && \
+    tar xf /tmp/libevent.tar.gz -C /tmp && \
+    cd /tmp/libevent-2.1.12-stable && \
+    ./configure --prefix=/run/ocp-efa/libevent --disable-openssl && make install
+
+# Install AWS OFI NCCL PLUGIN
+RUN git clone https://github.com/aws/aws-ofi-nccl /tmp/aws-ofi-nccl && \
+    cd /tmp/aws-ofi-nccl && \
+    ./autogen.sh && \
+    ./configure --prefix=/run/ocp-efa/aws-ofi-nccl --with-libfabric=/run/ocp-efa/amazon/efa \
+    --with-mpi=/run/ocp-efa/amazon/openmpi --with-hwloc=/run/ocp-efa/hwloc --with-cuda=/usr/local/cuda-12.2 --enable-platform-aws && \
+    make && \
+    make install
+
+FROM nvcr.io/nvidia/pytorch:23.05-py3
+
+COPY --from=builder /run/ocp-efa /run/ocp-efa
