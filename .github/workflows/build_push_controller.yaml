@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '1.21'
-      - name: set ARCH and OD
+      - name: set ARCH and OS
         run: |
             echo "ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)" >> $GITHUB_ENV
             echo "OS=$(uname | awk '{print tolower($0)}')" >> $GITHUB_ENV

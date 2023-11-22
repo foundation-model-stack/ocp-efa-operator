@@ -39,12 +39,12 @@ $ oc new-project ocp-efa-operator
 $ operator-sdk run bundle ghcr.io/ocp-efa-operator-bundle:v0.0.1 --namespace ocp-efa-operator
 ```
 
-Deploy a GdrdrvDriver CRD
+Deploy a GdrdrvDriver CR
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_gdrdrvdriver.yaml
 ```
 
-Deploy a EfaDriver CRD
+Deploy a EfaDriver CR
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_efadriver.yaml
 ```
@@ -83,12 +83,12 @@ $ oc create secret generic mysecret -n ocp-efa-operator --from-file=.dockerconfi
 $ operator-sdk run bundle myrepo.io/ocp-efa-operator-bundle:v0.0.1 --pull-secret-name mysecret --namespace ocp-efa-operator
 ```
 
-Deploy a GdrdrvDriver CRD
+Deploy GdrdrvDriver
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_gdrdrvdriver.yaml
 ```
 
-Deploy a EfaDriver CRD
+Deploy EfaDriver
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_efadriver.yaml
 ```
@@ -152,13 +152,13 @@ $ oc apply -f test/gdrcopy-test.yaml
 
 ### Cleanup
 
-Delete the CRDs
+Delete CRs
 ```bash
 $ oc delete -f config/sample/efa_v1alpha1_efadriver.yaml
 $ oc delete -f config/sample/efa_v1alpha1_gdrdrvdriver.yaml
 ```
 
-Cleanup the bundle
+Cleanup bundle
 ```bash
 $ operator-sdk cleanup ocp-efa-operator --delete-all
 ```
