@@ -33,7 +33,7 @@ jobs:
       - name: Archive code coverage results
         uses: actions/upload-artifact@v3
         with:
-          name: code-coverage-report
+          name: operator-code-coverage-report
           path: operator-cover.html
   device-plugin-test:
     runs-on: ubuntu-latest
@@ -52,5 +52,5 @@ jobs:
       - name: Archive code coverage results
         uses: actions/upload-artifact@v3
         with:
-          name: code-coverage-report
+          name: device-plugin-code-coverage-report
           path: dp-cover.html

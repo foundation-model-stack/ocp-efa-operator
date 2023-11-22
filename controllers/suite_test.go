@@ -23,10 +23,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	efav1alpha1 "github.com/foundation-model-stack/ocp-efa-operator/api/v1alpha1"
 	kmmv1beta1 "github.com/kubernetes-sigs/kernel-module-management/api/v1beta1"
 	securityv1 "github.com/openshift/api/security/v1"
 	nfdv1alpha1 "github.com/openshift/node-feature-discovery/pkg/apis/nfd/v1alpha1"
-	efav1alpha1 "github.com/foundation-model-stack/ocp-efa-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	//+kubebuilder:scaffold:imports
 )
@@ -43,7 +43,9 @@ const kmmNamespace = "openshift-kmm"
 const clusterName = "test"
 
 func TestAPIs(t *testing.T) {
-	os.Setenv("KUBEBUILDER_ASSETS", "/data/go/src/github.com/foundation-model-stack/ocp-efa-operator/bin/k8s/1.26.0-linux-amd64")
+	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
+		os.Setenv("KUBEBUILDER_ASSETS", filepath.Join(build.Default.GOPATH, "src", "github.com", "foundation-model-stack", "ocp-efa-operator", "bin", "k8s", "1.26.0-linux-amd64"))
+	}
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Controller Suite")
