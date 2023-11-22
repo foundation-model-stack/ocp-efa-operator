@@ -36,7 +36,7 @@ Admins need to carefully cleanup ocp-efa-operator at first before uninstalling/u
 Run bundle with a public image
 ```bash
 $ oc new-project ocp-efa-operator
-$ operator-sdk run bundle ghcr.io/ocp-efa-operator-bundle:v0.0.1 --namespace ocp-efa-operator
+$ operator-sdk run bundle ghcr.io/foundation-model-stack/ocp-efa-operator-bundle:v0.0.1 --namespace ocp-efa-operator
 ```
 
 Deploy GdrdrvDriver

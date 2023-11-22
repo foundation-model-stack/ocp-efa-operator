@@ -14,6 +14,7 @@ on:
       - config/**
       - ./Dockerfile
       - ./Makefile
+      - bundle/**
   workflow_dispatch:
 
 env:
