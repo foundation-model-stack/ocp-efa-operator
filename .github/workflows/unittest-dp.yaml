@@ -1,0 +1,37 @@
+name: Perform unittest for device plugins
+
+on:
+  pull_request:
+    paths:
+      - api/**
+      - controllers/**
+      - ./main.go
+      - ./go.mod
+      - ./go.sum
+      - config/**
+  push:
+    paths:
+      - cmd/**
+      - ./go.mod
+      - ./go.sum
+
+jobs:
+  device-plugin-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.21'
+      - name: Tidy
+        run: |
+          go mod tidy
+      - name: Make generate
+        run: make generate
+      - name: Test Uploader
+        run: make dp-test
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: device-plugin-code-coverage-report
+          path: dp-cover.html

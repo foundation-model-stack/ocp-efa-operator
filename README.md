@@ -39,12 +39,12 @@ $ oc new-project ocp-efa-operator
 $ operator-sdk run bundle ghcr.io/ocp-efa-operator-bundle:v0.0.1 --namespace ocp-efa-operator
 ```
 
-Deploy a GdrdrvDriver CR
+Deploy GdrdrvDriver
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_gdrdrvdriver.yaml
 ```
 
-Deploy a EfaDriver CR
+Deploy EfaDriver
 ```bash
 $ oc apply -f config/sample/efa_v1alpha1_efadriver.yaml
 ```

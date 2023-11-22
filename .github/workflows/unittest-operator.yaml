@@ -1,8 +1,22 @@
-name: Perform unittest
+name: Perform unittest for operator
 
 on:
   pull_request:
+    paths:
+      - api/**
+      - controllers/**
+      - ./main.go
+      - ./go.mod
+      - ./go.sum
+      - config/**
   push:
+    paths:
+      - api/**
+      - controllers/**
+      - ./main.go
+      - ./go.mod
+      - ./go.sum
+      - config/**
 
 jobs:
   operator-test:
