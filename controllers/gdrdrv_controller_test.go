@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	chartsv1alpha1 "github.com/foundation-model-stack/ocp-efa-operator/api/v1alpha1"
 	kmmv1beta1 "github.com/kubernetes-sigs/kernel-module-management/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	securityv1 "github.com/openshift/api/security/v1"
-	chartsv1alpha1 "github.com/foundation-model-stack/ocp-efa-operator/api/v1alpha1"
 	"golang.org/x/sys/unix"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
