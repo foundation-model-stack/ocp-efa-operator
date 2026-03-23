@@ -6,7 +6,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.28.0
 	github.com/openshift/node-feature-discovery v0.0.0-20231009094331-79b69294c773
-	google.golang.org/grpc v1.59.0
+	google.golang.org/grpc 1.79.3
 	k8s.io/apimachinery v0.28.3
 	k8s.io/client-go v0.28.3
 	sigs.k8s.io/controller-runtime v0.16.3
